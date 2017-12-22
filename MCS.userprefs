@@ -1,11 +1,9 @@
 ﻿<Properties StartupConfiguration="{11C48E14-3310-4544-9A2E-99038A31644B}|Default">
-  <MonoDevelop.Ide.Workbench ActiveDocument="MCS/utilities.cs">
+  <MonoDevelop.Ide.Workbench ActiveDocument="MCS Status">
     <Files>
-      <File FileName="MCS/Program.cs" Line="11" Column="6" />
-      <File FileName="MCS/userInterface.cs" Line="1" Column="1" />
-      <File FileName="MCS/slave.cs" Line="34" Column="14" />
-      <File FileName="MCS/master.cs" Line="6" Column="9" />
-      <File FileName="MCS/utilities.cs" Line="15" Column="10" />
+      <File FileName="MCS/utilities.cs" Line="16" Column="41" />
+      <File FileName="MCS/Program.cs" Line="9" Column="43" />
+      <File FileName="MCS Status" />
     </Files>
   </MonoDevelop.Ide.Workbench>
   <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug|x86" />
