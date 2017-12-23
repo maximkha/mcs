@@ -39,6 +39,7 @@
     <Compile Include="slave.cs" />
     <Compile Include="master.cs" />
     <Compile Include="utilities.cs" />
+    <Compile Include="MaxAmp2.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>

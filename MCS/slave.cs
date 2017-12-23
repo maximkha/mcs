@@ -6,37 +6,101 @@ using System.Collections.Generic;
 
 namespace MCS
 {
-    public class slave
+    public static class slave
     {
-        public IPAddress localIp;
-        public IPAddress masterIp;
 
-        public slave()
+        //File Transfer
+        //[4][x][8][x]
+        //Bytes for file name
+        //Filename
+        //Bytes for file
+        //File
+
+        //Connection
+        //Server (Ping)       ->             Slaves
+        //Server              <- (Ping Back) Slaves
+        //Server (JoinGroup)  ->             Slave
+        //Server              <- (Join)      Slave
+
+        //Initial Task Submit
+        //Server: Make info object and populate tasks
+        //For each slave customize info object so they dont run same things
+        //Server (Task Sync)  ->             Slave
+
+        //Edit Task
+        //If not current task
+        //Server (Empty Info) ->             Slave
+        //Server edit task info
+        //Server (Task Sync)  ->             Slave
+
+        //Stop All
+        //Server (Halt)       ->             Slave
+
+        //Slave Checkin
+        //Server              <- (Info Sync) Slave
+
+        //2 Threads
+        //1: Tcp and UDP interface
+        //2: Task interface
+
+        //TODO: implement info obj set
+        public class serverSide
         {
+            info infoObj = null;
+
+            public void serverToClientSync()
+            {
+                
+            }
+        }
+
+        //Theese are serializable to be transferred between the serverSide version and client
+        [Serializable]
+        public class taskInfo
+        {
+            string executable;
+            string jobstatus = "inQueue";
+            DateTime startTime;
+            string commmandArgs;
+            string outputLoc;
+            string inputLoc;
+        }
+
+		//https://docs.microsoft.com/en-us/dotnet/standard/serialization/basic-serialization
+		[Serializable]
+        public class info
+        {
+            Stack<taskInfo> tasks;
+            string slaveStatus = "idle";
+            taskInfo curTask;
         }
 
         public class server
         {
-            private readonly UdpClient udp = new UdpClient(15000);
-            private void pingStartListening()
+            utilities.udp.udpServer ping;
+
+            //TODO: make this cusomizable
+            public server()
             {
-                this.udp.BeginReceive(pingReceive, new object());
+                ping = new utilities.udp.udpServer(1500);
+                ping.onReceive = this.receive;
             }
-            private void pingReceive(IAsyncResult ar)
+
+            public void receive(byte[] data, IPEndPoint ipep)
             {
-                IPEndPoint ip = new IPEndPoint(IPAddress.Any, 15000);
-                byte[] bytes = udp.EndReceive(ar, ref ip);
-                string message = Encoding.ASCII.GetString(bytes);
-                if(message=="mcsPing")
+                string rs = Encoding.ASCII.GetString(data);
+                Console.WriteLine("{0} sent: {1}",ipep.Address,rs);
+                if(rs=="mcsPing")
                 {
-                    Dictionary<string, string> p = new Dictionary<string, string>();
-                    p.Add("serverID", utilities.getlocalIp().ToString());
-                    utilities.sendPostHttp("http://" + ip.Address + "/pingback", p);
+					Dictionary<string, string> p = new Dictionary<string, string>();
+					p.Add("slaveIP", utilities.getlocalIp().ToString());
+					utilities.sendPostHttp("http://" + ipep.Address + "/pingback", p);
                 }
-                Console.WriteLine("From {0} received: {1} ", ip.Address, message);
 
-                pingStartListening();
-
+                if(rs=="mcsJoin")
+                {
+                    //Join code
+                }
             }
         }
     }
