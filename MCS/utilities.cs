@@ -6,12 +6,15 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Linq;
 using System.IO;
+using System.Threading;
 
 namespace MCS
 {
     public static class utilities
     {
-        public static readonly string Version = "MCS1.0";
+		//TODO? https://stackoverflow.com/questions/21314413/reuse-a-tcpclient-in-c-sharp
+		//For Threads https://stackoverflow.com/questions/811224/how-to-create-a-thread
+		public static readonly string Version = "MCS1.0";
 
         private static readonly HttpClient httpclient = new HttpClient();
 
@@ -24,6 +27,20 @@ namespace MCS
                 Console.WriteLine(addr);
             }
             return localIPs[0];
+        }
+
+        public static string jsonObjectsToArray(List<string> objects, string arrayName)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("\"{0}\":[",arrayName);
+            foreach(string jsonObj in objects)
+            {
+                sb.Append(jsonObj);
+                sb.Append(",");
+            }
+            sb.Length--;
+            sb.Append("]");
+            return sb.ToString();
         }
 
         public static string sendPostHttp(string url, Dictionary<string, string> values)
@@ -115,7 +132,13 @@ namespace MCS
 					client.Close();
                 }
 
-                public void broadcast(byte[] message)
+				public void send(byte[] message, IPAddress to)
+				{
+					client.Send(message, message.Length, new IPEndPoint(to,port));
+					client.Close();
+				}
+
+                public void emit(byte[] message)
                 {
                     if (port == 0) throw new Exception("Port not set for broadcast");
                     send(message, new IPEndPoint(IPAddress.Broadcast, port));
@@ -210,40 +233,124 @@ namespace MCS
 
         public static class maxControlNet
         {
-            public class server
+            public class server : IDisposable
             {
                 private readonly TcpListener tcpListener;
-                private Dictionary<int, TcpClient> clients = new Dictionary<int, TcpClient>();
-                private int nextID = 1;
+                public List<slave.serverSide> clients = new List<slave.serverSide>();
+                private bool notStopped = true;
+                private Thread listener;
 
 				public server(IPEndPoint ipe)
 				{
 					tcpListener = new TcpListener(ipe);
+                    tcpListener.Start();
+                    listener = new Thread(listen);
 				}
 
                 public void start()
                 {
-                    tcpListener.Start();
-                    while(true)
-                    {
-                        TcpClient client = tcpListener.AcceptTcpClient();
-                        NetworkStream ns = client.GetStream();
-                        using (var binaryWriter = new BinaryWriter(ns, Encoding.UTF8))
-                        using (var binaryReader = new BinaryReader(ns, Encoding.UTF8))
-                        {
-                            binaryWriter.Write(Version);
-                            clients.Add(nextID,client); //TODO: serverside client holds tcpClient and version and other
-                            //Mabey make slave instance?
-                            nextID++;
+                    notStopped = true;
+                    listener.Start();
+                }
 
-                        }
-                    }
+                private void listen()
+                {
+					while (notStopped)
+					{
+						TcpClient client = tcpListener.AcceptTcpClient();
+						NetworkStream ns = client.GetStream();
+						using (var binaryWriter = new BinaryWriter(ns, Encoding.UTF8))
+						using (var binaryReader = new BinaryReader(ns, Encoding.UTF8))
+						{
+							binaryWriter.Write(Version);
+                            string clientVer = binaryReader.ReadString();
+                            if (clientVer == Version) 
+                            {   
+                                binaryWriter.Write(true);
+                                clients.Add(new slave.serverSide(client)); 
+                            }
+                            else
+                            { 
+                                Console.WriteLine("Client had version: {0} while server had version: {1}", clientVer, Version); 
+                                binaryWriter.Write(false);
+                            }
+						}
+					}
+                }
+
+                public void stop()
+                {
+                    notStopped = false;
+                    foreach (slave.serverSide c in clients) c.client.Close();
+                    clients.Clear();
+                }
+
+                public void Dispose()
+                {
+                    foreach (slave.serverSide c in clients) c.client.Close();
+
+                    tcpListener.Stop();
+                    //tcpListener.
+                }
+
+                public List<slave.serverSide> getAllDown()
+                {
+                    List<slave.serverSide> ret = new List<slave.serverSide>();
+                    foreach (slave.serverSide c in clients) if (!c.ping()) ret.Add(c);
+                    return ret;
+                }
+
+                public void kickAllDown()
+                {
+                    List<slave.serverSide> ssl = new List<slave.serverSide>();
+                    ssl = getAllDown();
+                    foreach (slave.serverSide c in ssl) c.disconnect();
+
+                    clients.RemoveAll(item => ssl.Contains(item));
                 }
             }
 
             public class client
             {
-                
+                public TcpClient tcpclient;
+                public NetworkStream ns;
+                private bool notStopped = true;
+                private Thread networkStreamHandler;
+                public Action onData = null;
+                public Action onDisconnect = null;
+
+                public client()
+                {
+                    
+                }
+
+                public void start(IPEndPoint ep)
+                {
+                    notStopped = true;
+                    if (onData == null) return;
+					tcpclient = new TcpClient(ep);
+					ns = tcpclient.GetStream();
+					networkStreamHandler = new Thread(nsThread);
+					networkStreamHandler.Start();
+                }
+
+                public void stop()
+                {
+                    //networkStreamHandler.S
+                    notStopped = false;
+                    tcpclient.GetStream().Close();
+                    tcpclient.Close();
+                }
+
+                private void nsThread()
+                {
+                    while(notStopped && tcpclient.Connected)
+                    {
+                        Thread.Sleep(500);
+                        if (ns.DataAvailable) onData();
+                    }
+                    if (onDisconnect != null) onDisconnect();
+                }
             }
         }
     }
